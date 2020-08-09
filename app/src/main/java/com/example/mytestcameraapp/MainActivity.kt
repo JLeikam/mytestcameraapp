@@ -1,23 +1,27 @@
 package com.example.mytestcameraapp
 
-import androidx.appcompat.app.AppCompatActivity
-import android.os.Bundle
 import android.Manifest
 import android.content.pm.PackageManager
+import android.media.Image
 import android.net.Uri
+import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import java.util.concurrent.Executors
+import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
 import kotlinx.android.synthetic.main.activity_main.*
 import java.io.File
 import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+
 typealias LumaListener = (luma: Double) -> Unit
 
 class MainActivity : AppCompatActivity() {
@@ -99,6 +103,37 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
+    private fun extractText(imageProxy: ImageProxy){
+        if (imageProxy.image == null) {
+            return
+        }
+        val imageToProcess = InputImage.fromMediaImage(imageProxy.image!!, imageProxy.imageInfo.rotationDegrees)
+        val recognizer = TextRecognition.getClient()
+        val result = recognizer.process(imageToProcess)
+                .addOnSuccessListener { visionText ->
+                    val resultText = visionText.text
+                    for (block in visionText.textBlocks) {
+                        val blockText = block.text
+                        val blockCornerPoints = block.cornerPoints
+                        val blockFrame = block.boundingBox
+                        for (line in block.lines) {
+                            val lineText = line.text
+                            val lineCornerPoints = line.cornerPoints
+                            val lineFrame = line.boundingBox
+                            for (element in line.elements) {
+                                val elementText = element.text
+                                val elementCornerPoints = element.cornerPoints
+                                val elementFrame = element.boundingBox
+                            }
+                        }
+                    }
+                    Log.e(TAG, "processing image ${visionText.text}")
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "processing image failed ${e.message}", e)
+                }
+    }
+
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
 
@@ -115,12 +150,18 @@ class MainActivity : AppCompatActivity() {
 
             imageCapture = ImageCapture.Builder()
                     .build()
-
+//            val imageAnalyzer = ImageAnalysis.Builder()
+//                    .build()
+//                    .also {
+//                        it.setAnalyzer(cameraExecutor, LuminosityAnalyzer { luma ->
+//                            Log.d(TAG, "Average luminosity: $luma")
+//                        })
+//                    }
             val imageAnalyzer = ImageAnalysis.Builder()
                     .build()
                     .also {
-                        it.setAnalyzer(cameraExecutor, LuminosityAnalyzer { luma ->
-                            Log.d(TAG, "Average luminosity: $luma")
+                        it.setAnalyzer(cameraExecutor, ImageAnalysis.Analyzer {
+                            extractText(it)
                         })
                     }
 
